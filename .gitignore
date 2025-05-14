@@ -1,0 +1,9 @@
+# virtual env
+.venv/
+__pycache__/
+*.pyc
+
+# model checkpoints or data
+*.h5
+*.keras
+/data/
