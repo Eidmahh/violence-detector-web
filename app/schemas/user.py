@@ -1,23 +1,18 @@
 # app/schemas/user.py
+from pydantic import BaseModel
 
-from pydantic import BaseModel, EmailStr, constr
-from typing import Literal
-from app.db.models import UserRole
-
-# used by signup
 class UserCreate(BaseModel):
-    email: EmailStr
-    password: constr(min_length=8)
+    email: str
+    password: str
+    role: str  # "admin" or "viewer"
 
-# used for listing / reading back
 class UserRead(BaseModel):
     id: int
-    email: EmailStr
-    role: UserRole
+    email: str
+    role: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
-# used by admin to update someone's role
 class UserUpdateRole(BaseModel):
-    role: Literal["admin", "viewer"]
+    role: str

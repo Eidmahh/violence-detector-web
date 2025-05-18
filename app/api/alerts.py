@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.db.models import Alert
+from app.db.models import Alert, User           # ← add User here
 from app.schemas.alert import AlertRead, AlertCreate
 from app.api.auth import get_current_active_user
 
@@ -18,10 +18,14 @@ def list_alerts(db: Session = Depends(get_db)):
 def create_alert(
     data: AlertCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_user),
+    current_user: User = Depends(get_current_active_user),
 ):
-    alert = Alert(**data.dict())
+    alert = Alert(
+        **data.dict(),
+        user_id=current_user.id,
+    )
     db.add(alert)
     db.commit()
     db.refresh(alert)
     return alert
+
