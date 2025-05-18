@@ -11,34 +11,38 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
-from app.core.config import settings
+from app.core.config       import settings
 from app.services.detector import ViolenceDetector
 
-# Auth router & security dependencies
-from app.api.auth import (
-    router as auth_router,
-    get_current_active_user,
-    get_current_active_admin,
-)
+# ─────────── NEW: import your SQLAlchemy Base & engine ────────────────────────
+from app.db.base    import Base
+from app.db.session import engine
 
-# Users and alerts routers
-from app.api.users import router as users_router
+# Import routers & security dependencies
+from app.api.auth   import router as auth_router, get_current_active_user, get_current_active_admin
+from app.api.users  import router as users_router
 from app.api.alerts import router as alerts_router
 
 app = FastAPI(title=settings.APP_NAME)
 
-# 1) Static files
+# ─────────── NEW: ensure DB tables exist on startup ───────────────────────────
+@app.on_event("startup")
+def init_db():
+    """
+    Create all tables (users, alerts, etc.) before serving any requests.
+    Safe to call on every startup.
+    """
+    Base.metadata.create_all(bind=engine)
+
+
+# 1) Serve static assets
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 2) Templates
+# 2) Set up Jinja2 templates
 templates = Jinja2Templates(directory="templates")
 
-# 3) Auth endpoints
-app.include_router(
-    auth_router,
-    prefix="/auth",
-    tags=["auth"],
-)
+# 3) Auth endpoints (mounted at /auth)
+app.include_router(auth_router)
 
 # 4) User management (Admin only)
 app.include_router(
@@ -48,7 +52,7 @@ app.include_router(
     dependencies=[Depends(get_current_active_admin)],
 )
 
-# 5) Alert endpoints (authenticated users)
+# 5) Alert endpoints (Authenticated users)
 app.include_router(
     alerts_router,
     prefix="/alerts",
@@ -56,7 +60,7 @@ app.include_router(
     dependencies=[Depends(get_current_active_user)],
 )
 
-# 6) MJPEG video stream (public for now)
+# 6) MJPEG video stream (public)
 @app.get("/video_feed", tags=["stream"])
 def video_feed():
     def frame_generator():
@@ -87,7 +91,7 @@ def video_feed():
             )
             detector.seq_buf.append(feat)
 
-            # 2) if we have a full sequence, infer & smooth
+            # 2) infer & smooth once buffer is full
             label, color = "Gathering…", (0, 255, 255)
             if len(detector.seq_buf) == detector.seq_len:
                 arr   = np.stack(detector.seq_buf, axis=0)[None, ...]
@@ -101,12 +105,12 @@ def video_feed():
                 else:
                     label, color = f"✔ Normal ({avg:.2f})",    (0, 255, 0)
 
-            # 3) annotate
+            # 3) annotate frame
             out = frame.copy()
             cv2.putText(out, label, (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 1.0, color, 2)
 
-            # 4) encode & yield as MJPEG frame
+            # 4) yield as MJPEG chunk
             _, buffer = cv2.imencode(".jpg", out)
             frame_bytes = buffer.tobytes()
             yield (
@@ -123,7 +127,7 @@ def video_feed():
         media_type="multipart/x-mixed-replace; boundary=frame"
     )
 
-# 7) Root UI
+# 7) Root UI (Jinja2 template)
 @app.get("/", tags=["ui"])
 async def read_root(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
@@ -133,7 +137,7 @@ async def read_root(request: Request):
 async def healthz():
     return {"status": "ok"}
 
-# 9) Trigger background detection (auth required)
+# 9) Start background violence detection (auth required)
 @app.post("/start-detection", tags=["detection"])
 async def start_detection(
     background_tasks: BackgroundTasks,
@@ -155,7 +159,7 @@ async def start_detection(
     )
     return {"message": "Detection started"}
 
-# 10) Log mounted routes on startup (for your own debugging)
+# 10) Log all mounted routes on startup
 @app.on_event("startup")
 def log_routes():
     logging.basicConfig(level=logging.INFO)
@@ -165,7 +169,7 @@ def log_routes():
                 f"Route: {route.name:30} → Path: {route.path!r} Methods: {route.methods}"
             )
 
-# 11) Debug-only: return all routes in JSON
+# 11) Debug helper: dump routes as JSON
 @app.get("/debug/routes", include_in_schema=False)
 def debug_routes():
     return [

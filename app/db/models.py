@@ -1,28 +1,27 @@
 import enum
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Boolean  # ← added Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.db.base import Base
 
 class UserRole(str, enum.Enum):
     admin = "admin"
-    viewer = "viewer"
-
+    user  = "user"
 
 class User(Base):
     __tablename__ = "users"
     id             = Column(Integer, primary_key=True, index=True)
     email          = Column(String, unique=True, index=True, nullable=False)
     password_hash  = Column(String, nullable=False)
-    role           = Column(Enum(UserRole), nullable=False, default=UserRole.viewer)
-    is_active      = Column(Boolean, default=True)              # ← new column
+    role           = Column(Enum(UserRole), nullable=False, default=UserRole.user)
+    is_active      = Column(Boolean, default=True)
     twofa_secret   = Column(String, nullable=True)
     created_at     = Column(DateTime, default=datetime.utcnow)
     alerts         = relationship("Alert", back_populates="user")
 
     @property
     def is_admin(self) -> bool:
-        return self.role == UserRole.admin                      # ← new helper
+        return self.role == UserRole.admin
 
 class Alert(Base):
     __tablename__ = "alerts"

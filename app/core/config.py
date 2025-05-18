@@ -8,8 +8,9 @@ class Settings(BaseSettings):
     # App
     APP_NAME: str = "ViolenceDetectorWeb"
 
-    # Database
-    DATABASE_URL: str  # e.g. postgresql://user:pass@localhost/dbname
+       # Database (default to a local SQLite file)
+    DATABASE_URL: str = "sqlite:///./violence_db.sqlite"
+
 
     # JWT / Auth
     JWT_SECRET: str

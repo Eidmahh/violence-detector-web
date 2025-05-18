@@ -1,78 +1,36 @@
 # app/api/users.py
-
-from typing   import List
-
-from fastapi  import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.services.security import get_current_active_user, is_admin, hash_password
+from app.schemas.user import UserCreate, UserOut
+from app.db.models import User
 
-from app.db.session    import get_db
-from app.db.models     import User, UserRole
-from app.schemas.user  import UserRead, UserCreate, UserUpdateRole
-from app.services.security import hash_password
-from app.api.auth     import get_current_active_admin
+router = APIRouter(prefix="/users", tags=["users"])
 
-router = APIRouter()
-
-
-@router.post(
-    "/",
-    response_model=UserRead,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a new user (Admin only)",
-)
+@router.post("/", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(
-    data: UserCreate,
+    user_in: UserCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_admin),    # only admins
+    current_user = Depends(get_current_active_user),
 ):
-    # Prevent duplicate emails
-    if db.query(User).filter_by(email=data.email).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
-        )
-    # Create user
-    user = User(
-        email=data.email,
-        password_hash=hash_password(data.password),
-        role=UserRole(data.role),
+    # 1. Only allow admins
+    if not is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Not enough permissions")
+
+    # 2. Check for existing email
+    if db.query(User).filter(User.email == user_in.email).first():
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    # 3. Create & save
+    new_user = User(
+        email=user_in.email,
+        hashed_password=hash_password(user_in.password),
+        role=user_in.role,        # e.g. "admin" or "user"
+        is_active=True,
     )
-    db.add(user)
+    db.add(new_user)
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(new_user)
 
-
-@router.get(
-    "/",
-    response_model=List[UserRead],
-    summary="List all users (Admin only)",
-)
-def list_users(
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_admin),    # only admins
-):
-    return db.query(User).all()
-
-
-@router.patch(
-    "/{user_id}/role",
-    response_model=UserRead,
-    summary="Update a user's role (Admin only)",
-)
-def update_user_role(
-    user_id: int,
-    data: UserUpdateRole,
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_active_admin),    # only admins
-):
-    user = db.get(User, user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-    user.role = UserRole(data.role)
-    db.commit()
-    db.refresh(user)
-    return user
+    return new_user
