@@ -1,5 +1,3 @@
-# app/main.py
-
 from fastapi import FastAPI, BackgroundTasks, Depends
 from app.core.config import settings
 from app.services.detector import ViolenceDetector
@@ -15,9 +13,10 @@ from app.api.alerts import router as alerts_router
 app = FastAPI(title=settings.APP_NAME)
 
 # 1) Auth endpoints (signup, login, reset…)
+#    auth_router itself already has prefix="/auth" defined in auth.py,
+#    so here we just include it without re-specifying the prefix:
 app.include_router(
     auth_router,
-    prefix="/auth",
     tags=["auth"],
 )
 

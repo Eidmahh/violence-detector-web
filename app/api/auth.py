@@ -12,8 +12,13 @@ from app.schemas.user import UserCreate, UserRead
 from app.schemas.auth import LoginRequest, ResetRequest, ResetPassword
 from app.schemas.token import Token, TokenPayload
 from app.services.security import hash_password, verify_password, create_access_token
+from pydantic import BaseModel
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+router = APIRouter( tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
@@ -45,11 +50,15 @@ def signup(data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(data: LoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter_by(email=data.email).first()
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid credentials")
-    access_token = create_access_token(user.id, user.role.value)
+def login(
+    credentials: LoginRequest,
+    db: Session = Depends(get_db)
+):
+    # authenticate just like before, but using credentials.username & credentials.password
+    user = authenticate_user(db, credentials.username, credentials.password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect credentials")
+    access_token = create_access_token({"sub": user.email, "role": user.role})
     return {"access_token": access_token, "token_type": "bearer"}
 
 

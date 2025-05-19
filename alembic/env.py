@@ -6,26 +6,59 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # ─── 1) Make sure we can import your app ───────────────────────────────────────
-# Calculate project_root = parent of this file's folder (violence-detector-web/)
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-# Prepend it to the PYTHONPATH so "import app" works
 sys.path.insert(0, project_root)
 
-# ─── 2) Import your settings and metadata ─────────────────────────────────────
-from app.core.config import settings    # your DATABASE_URL, etc.
-from app.db.base import Base           # the declarative_base()
-import app.db.models                    # noqa: F401 – registers the User/Alert models
+# ─── 2) Load your .env (so settings picks up DATABASE_URL & friends) ─────────
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=os.path.join(project_root, '.env'))
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
+# ─── 3) Import your settings and metadata ────────────────────────────────────
+from app.core.config import settings    # pydantic BaseSettings reading your .env
+from app.db.base import Base           # the declarative_base()
+import app.db.models                    # noqa: registers all models
+
+# this is the Alembic Config object
 config = context.config
 
-# ─── 3) (Optional) override the URL if you want to drive it from .env ───────
+# ─── 4) Override URL from .env via settings ──────────────────────────────────
+# (this replaces whatever is in alembic.ini)
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
+# ─── 5) Set up logging ───────────────────────────────────────────────────────
 fileConfig(config.config_file_name)
 
-# ─── 4) tell Alembic what our MetaData target is ─────────────────────────────
+# ─── 6) Point Alembic at your MetaData ──────────────────────────────────────
 target_metadata = Base.metadata
+
+
+def run_migrations_offline():
+    """Run migrations in 'offline' mode."""
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url, target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"}
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def run_migrations_online():
+    """Run migrations in 'online' mode."""
+    connectable = engine_from_config(
+        config.get_section(config.config_ini_section),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+
+        with context.begin_transaction():
+            context.run_migrations()
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()

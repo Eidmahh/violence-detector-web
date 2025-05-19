@@ -2,6 +2,8 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+# If you meant your SQLAlchemy User model:
+from app.db.models import User
 
 from app.db.session import get_db
 from app.db.models import Alert
