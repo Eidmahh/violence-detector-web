@@ -1,23 +1,25 @@
 # app/schemas/user.py
 
-from pydantic import BaseModel, EmailStr, constr
+from pydantic import BaseModel, EmailStr
 from typing import Literal
-from app.db.models import UserRole
 
-# used by signup
-class UserCreate(BaseModel):
+# Base schema with fields common to reading and creating
+class UserBase(BaseModel):
     email: EmailStr
-    password: constr(min_length=8)
+    role: Literal['admin', 'user']
 
-# used for listing / reading back
-class UserRead(BaseModel):
+# Schema for user creation (input)
+class UserCreate(UserBase):
+    password: str
+
+# Schema for user output/read
+class UserOut(UserBase):
     id: int
-    email: EmailStr
-    role: UserRole
 
-    class Config:
-        orm_mode = True
+    # Pydantic v2: allow reading from ORM objects
+    model_config = {
+        'from_attributes': True
+    }
 
-# used by admin to update someone's role
-class UserUpdateRole(BaseModel):
-    role: Literal["admin", "viewer"]
+# Alias UserRead to UserOut for backward compatibility
+UserRead = UserOut
